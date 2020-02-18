@@ -1,46 +1,68 @@
-# import tensorflow as tf
-# from tensorflow import keras
+from tensorflow import keras
+from tensorflow.keras.layers import Input, Embedding, LSTM, Flatten, Dropout, Dense
+from tensorflow.keras.models import Model
 import pandas as pd
 import numpy as np
-import pickle
 import os
-from preprocess import preprocess
-import json
+from utils import analyzeDataLength
+from dictionary import load_dictionary, createTextdictionary, createKeyDict, createLocationDict
+from preprocess import encodeData, encodeKeyAndLoc
 
 train_data = pd.read_csv(os.getcwd() + "/NLP with Disaster Tweets/data/train.csv",sep=",")
 test_data = pd.read_csv(os.getcwd() + "/NLP with Disaster Tweets/data/test.csv",sep=",")
 
 X_train = np.array(train_data.drop(['id', 'target'], axis='columns'))
 Y_train = np.array(train_data['target'])
-X_test = np.array(train_data.drop(['id', 'target'], axis='columns'))
+X_test = np.array(test_data.drop(['id'], axis='columns'))
 
-dictionary = {'<PAD>': 0, 'UNK': 1}
+num_words = 20095
+num_key_words = 221
+num_locations = 257
 
-def create_and_save_dictionary():
-    i = 2
-    numwords = 0
-    for data in X_train:
-        word_array = preprocess(data[2])
-        for word in word_array:
-            word = word.lower()
-            if not word in dictionary:
-                dictionary[word] = i
-                i = i + 1
-                numwords = numwords + 1
-    save_dictionary(dictionary)
+maxLen = 150
 
-def save_dictionary(dict):
-    with open(os.getcwd() + '/NLP with Disaster Tweets/dictionary.pkl', 'wb') as fileData:
-        pickle.dump(dict, fileData, pickle.HIGHEST_PROTOCOL)
-        
-def load_dictionary():
-    with open(os.getcwd() + '/NLP with Disaster Tweets/dictionary.pkl', 'rb') as fileData:
-        return pickle.load(fileData)
+# createTextdictionary(X_train[:,2])
+# createKeyDict(X_train[:,0])
+# createLocationDict(X_train[:,1])
 
-def saveDictAsJson(dict):
-    with open(os.getcwd() + '/NLP with Disaster Tweets/dictionary.json', 'w') as fileData:
-        return json.dump(dict, fileData)
-        
-create_and_save_dictionary()
-# print(load_dictionary())
+# analyzeDataLength(X_train[:,2])
 
+textDict = load_dictionary('dictionary.pkl')
+keyDict = load_dictionary('keyDict.pkl')
+locDict = load_dictionary('locDict.pkl')
+
+textInput = encodeData(X_train[:,2], textDict, maxLen)
+keyInput = encodeKeyAndLoc(X_train[:,0], keyDict)
+locInput = encodeKeyAndLoc(X_train[:,1], locDict)
+
+keyInput = np.expand_dims(np.array(keyInput), axis=1)
+locInput = np.expand_dims(np.array(locInput), axis=1)
+keyAndLocInput = np.concatenate((keyInput, locInput), axis=1)
+
+# num_words + 1 because the 0 position is 'UNK' words
+
+text_input_layer = Input(shape=(maxLen,), name = 'text_input')
+embedding_layer_1 = Embedding(input_dim = num_words + 1, output_dim = 80, input_length = maxLen)(text_input_layer)
+lstm_layer = LSTM(60)(embedding_layer_1)
+
+other_input_layer = Input(shape=(2,), name = 'other_input')
+embedding_layer_2 = Embedding(input_dim = num_key_words + num_locations + 2, output_dim = 10, input_length = 2)(other_input_layer)
+flatten_embedding = Flatten()(embedding_layer_2)
+concatenated_layer = keras.layers.concatenate([lstm_layer, flatten_embedding])
+
+next_layer = Dropout(0.2)(concatenated_layer)
+
+output_layer = Dense(1, activation='sigmoid', name='output')(next_layer)
+
+model = Model(inputs=[text_input_layer, other_input_layer], outputs=[output_layer])
+model.compile(optimizer="adam", loss="binary_crossentropy", metrics = ["accuracy"])
+model_checkpoint = keras.callbacks.ModelCheckpoint(
+    os.getcwd() + "/NLP with Disaster Tweets/model.h5", 
+    save_best_only=True,
+    monitor="val_acc",
+    mode="max")
+model.fit([textInput, keyAndLocInput], [Y_train],
+         epochs = 40, 
+         batch_size = 1000, 
+         shuffle = True, 
+         validation_split=0.15)

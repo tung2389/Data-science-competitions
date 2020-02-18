@@ -1,11 +1,14 @@
+import numpy as np
+from tensorflow import keras
+
 specialCharacters = [",", ".", "(", ")", ":", '"', ";", "!","?","@","/","\\"]
 count = 0
 def preprocess(text):
     text = deleteUrls(text) # Based on the training data, I think that the urls are irrelevant and they should have no impact on the prediction of the model
+    text = text.lower()
     for char in specialCharacters:
         text = text.replace(char, "") # Eliminate special characters
     text = text.strip().split(" ") # Split words into array
-    print(count)
     return text
 
 def deleteUrls(text):
@@ -48,3 +51,29 @@ def findUrls(text):
             break
     return urls
 
+def encodeData(data, dictionary, maxLen):
+    for i in range(0, len(data)):
+        data[i] = preprocess(data[i])
+
+    for i in range(0, len(data)):
+        text = data[i]
+        for j in range(0, len(text)):
+            word = text[j]
+            if word in dictionary:
+                data[i][j] = dictionary[word]
+            else:
+                data[i][j] = dictionary['UNK']
+    data = keras.preprocessing.sequence.pad_sequences(data, 
+                                                    value=dictionary["<PAD>"], 
+                                                    padding="post", 
+                                                    maxlen=maxLen)
+    return data
+
+def encodeKeyAndLoc(data, dictionary):
+    for i in range(0, len(data)):
+        element = data[i]
+        if element in dictionary:
+            data[i] = dictionary[element]
+        else:
+            data[i] = dictionary['UNK']
+    return data
