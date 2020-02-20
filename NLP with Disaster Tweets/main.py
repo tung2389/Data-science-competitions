@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Input, Embedding, LSTM, Flatten, Dropout, Dense
+from tensorflow.keras.layers import Input, Embedding, LSTM, Flatten, Dropout, Dense, MaxPooling1D
 from tensorflow.keras.models import Model
 import pandas as pd
 import numpy as np
@@ -50,13 +50,15 @@ keyAndLocInput = np.asarray(np.concatenate((keyInput, locInput), axis=1), dtype=
 
 text_input_layer = Input(shape=(maxLen,), name = 'text_input')
 embedding_layer_1 = Embedding(input_dim = num_words + 1, output_dim = 80, input_length = maxLen)(text_input_layer)
-lstm_layer = LSTM(60)(embedding_layer_1)
-# lstm_layer = Dropout(0.2)(lstm_layer)
+lstm_layer = LSTM(60, return_sequences=True)(embedding_layer_1)
+lstm_layer = Dropout(0.2)(lstm_layer)
+pooling_layer = MaxPooling1D(pool_size=2)(lstm_layer)
+flatten_pooling = Flatten()(pooling_layer)
 
 other_input_layer = Input(shape=(2,), name = 'other_input')
 embedding_layer_2 = Embedding(input_dim = num_key_words + num_locations + 2, output_dim = 2, input_length = 2)(other_input_layer)
 flatten_embedding = Flatten()(embedding_layer_2)
-concatenated_layer = keras.layers.concatenate([lstm_layer, flatten_embedding])
+concatenated_layer = keras.layers.concatenate([flatten_pooling, flatten_embedding])
 
 next_layer = Dense(64, activation='relu')(concatenated_layer)
 # next_layer = Dense(64, activation='relu')(next_layer)
