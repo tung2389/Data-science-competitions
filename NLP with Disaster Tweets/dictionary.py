@@ -7,14 +7,25 @@ dictionary = {'<PAD>': 0, 'UNK': 1}
 keywordDict = {'UNK':0}
 locationDict = {'UNK':0}
 
+num_words = 10000
+
 def createTextdictionary(X_train):
     i = 2
+    count = {}
     for data in X_train:
         word_array = preprocess(data)
         for word in word_array:
-            if not word in dictionary:
-                dictionary[word] = i
-                i = i + 1
+                if not word in count:
+                    count[word] = 1
+                else:
+                    count[word] = count[word] + 1
+    count = sorted(count.items(), key=lambda item: item[1], reverse=True)
+    for word,value in count:
+        if not word in dictionary:
+            dictionary[word] = i
+            i = i + 1
+        if i >= num_words + 2: # Only take top 15000 words with most occurrence.
+            break
     save_dictionary(dictionary, 'dictionary.pkl')
 
 def save_dictionary(dict, fileName):
